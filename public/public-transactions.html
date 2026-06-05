@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GDC Public Ledger</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --bg-dark: #0c0d10;
+            --bg-panel: #13151a;
+            --bg-hover: #1a1c22;
+            --border-color: #1f2229;
+            --text-primary: #e0e0e0;
+            --text-secondary: #666666;
+            --text-muted: #999999;
+            --accent: #00e5ff;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1024px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 500;
+            margin: 0;
+            letter-spacing: -0.025em;
+        }
+
+        .back-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            background: var(--bg-panel);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s;
+        }
+        
+        .back-link:hover {
+            background: var(--bg-hover);
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .search-group {
+            display: flex;
+            gap: 0.5rem;
+            flex: 1;
+            max-width: 500px;
+        }
+
+        input {
+            flex: 1;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-family: monospace;
+            font-size: 0.875rem;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        button {
+            background: var(--bg-panel);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            background: var(--bg-hover);
+            border-color: var(--text-muted);
+        }
+
+        button.primary {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
+        button.primary:hover:not(:disabled) {
+            background: #00ccdd;
+            border-color: #00ccdd;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .table-container {
+            background: #0a0b0e;
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            overflow: auto;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            min-width: 800px;
+        }
+
+        th {
+            background: var(--bg-panel);
+            color: var(--text-secondary);
+            font-size: 0.625rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 1rem 1.5rem;
+            font-size: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            font-family: monospace;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover:not(.empty-row) td {
+            background: #101217;
+        }
+
+        .masked-key {
+            color: var(--text-muted);
+            background: var(--bg-panel);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .amount {
+            color: #fff;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        th.amount-header {
+            text-align: right;
+        }
+
+        .tx-hash {
+            color: var(--text-secondary);
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .date {
+            color: var(--text-secondary);
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+            padding: 1rem;
+        }
+
+        .page-info {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        
+        .loading, .error-msg, .empty-msg {
+            text-align: center;
+            padding: 3rem !important;
+            color: var(--text-secondary);
+            font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+            font-size: 0.875rem;
+        }
+        .error-msg {
+            color: #ff4d4d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div>
+                <h1>Public Transactions</h1>
+                <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: bold;">GDC Network Ledger</div>
+            </div>
+            <a href="/" class="back-link">&larr; Back to Wallet</a>
+        </header>
+
+        <div class="controls">
+            <div class="search-group">
+                <input type="text" id="searchInput" placeholder="Search by exact public key...">
+                <button id="searchBtn" class="primary">Search</button>
+                <button id="clearBtn" style="display: none;">Clear</button>
+            </div>
+            <button id="refreshBtn">Refresh Ledger</button>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Transaction Hash</th>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>Date/Time (Local)</th>
+                        <th class="amount-header">Amount (GDC)</th>
+                    </tr>
+                </thead>
+                <tbody id="txBody">
+                    <tr class="empty-row"><td colspan="5" class="loading">Initializing network connection...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination">
+            <button id="prevBtn" disabled>Previous</button>
+            <span class="page-info" id="pageInfo">Page 1</span>
+            <button id="nextBtn" disabled>Next</button>
+        </div>
+    </div>
+
+    <script>
+        let supabaseClient = null;
+        let currentPage = 1;
+        const limit = 20; // Pagination
+        let totalCount = 0;
+        let currentSearchQuery = '';
+
+        // Masking rule: GDC + first 4 + ... + last 4
+        function maskKey(key) {
+            if (!key) return '-';
+            if (key.length <= 8) return key;
+            return `GDC${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
+        }
+
+        // Output local formatted date
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+        }
+
+        async function init() {
+            try {
+                // Fetch injected env vars securely from app context
+                const res = await fetch('/api/env');
+                const env = await res.json();
+                
+                const url = env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+                const key = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
+                
+                supabaseClient = supabase.createClient(url, key);
+                
+                // Bind actions
+                document.getElementById('prevBtn').addEventListener('click', () => changePage(-1));
+                document.getElementById('nextBtn').addEventListener('click', () => changePage(1));
+                document.getElementById('refreshBtn').addEventListener('click', () => {
+                    document.getElementById('refreshBtn').textContent = 'Refreshing...';
+                    loadPage(currentPage).then(() => {
+                        document.getElementById('refreshBtn').textContent = 'Refresh Ledger';
+                    });
+                });
+                
+                document.getElementById('searchBtn').addEventListener('click', executeSearch);
+                document.getElementById('searchInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') executeSearch();
+                });
+                
+                document.getElementById('clearBtn').addEventListener('click', () => {
+                    document.getElementById('searchInput').value = '';
+                    currentSearchQuery = '';
+                    currentPage = 1;
+                    document.getElementById('clearBtn').style.display = 'none';
+                    loadPage(currentPage);
+                });
+
+                // Load initial data
+                loadPage(1);
+            } catch(e) {
+                document.getElementById('txBody').innerHTML = `<tr class="empty-row"><td colspan="5" class="error-msg">Failed to initialize: ${e.message}</td></tr>`;
+            }
+        }
+
+        function executeSearch() {
+            currentSearchQuery = document.getElementById('searchInput').value.trim();
+            currentPage = 1;
+            if (currentSearchQuery) {
+                document.getElementById('clearBtn').style.display = 'block';
+            }
+            loadPage(currentPage);
+        }
+
+        function changePage(delta) {
+            const newPage = currentPage + delta;
+            if (newPage > 0) {
+                currentPage = newPage;
+                loadPage(currentPage);
+            }
+        }
+
+        async function loadPage(page) {
+            if (!supabaseClient) return;
+            
+            const tbody = document.getElementById('txBody');
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="5" class="loading">Fetching transactions from Supabase...</td></tr>';
+            
+            const from = (page - 1) * limit;
+            const to = from + limit - 1;
+            
+            try {
+                let query = supabaseClient
+                    .from('transactions')
+                    .select('*', { count: 'exact' });
+                
+                // Optional search filter by full raw pubkey
+                if (currentSearchQuery) {
+                    query = query.or(`from_pubkey.eq."${currentSearchQuery}",to_pubkey.eq."${currentSearchQuery}"`);
+                }
+                
+                const { data, count, error } = await query
+                    .order('created_at', { ascending: false })
+                    .range(from, to);
+                
+                if (error) {
+                    // Provide helpful response even if table doesn't exist yet
+                    if (error.code === '42P01') {
+                        throw new Error('The "transactions" table does not exist in Supabase yet.');
+                    }
+                    throw error;
+                }
+                
+                totalCount = count || 0;
+                
+                renderTable(data);
+                updatePagination();
+            } catch (err) {
+                console.error(err);
+                tbody.innerHTML = `<tr class="empty-row"><td colspan="5" class="error-msg">${err.message}</td></tr>`;
+            }
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('txBody');
+            
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr class="empty-row"><td colspan="5" class="empty-msg">No transactions found in the ledger.</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            
+            data.forEach(tx => {
+                const tr = document.createElement('tr');
+                
+                // Truncated Raw Hash
+                const hashTd = document.createElement('td');
+                hashTd.className = 'tx-hash';
+                const hashVal = tx.signature || tx.id || '';
+                hashTd.title = hashVal; // Full hash on hover
+                hashTd.textContent = hashVal ? (hashVal.substring(0, 16) + '...') : '-';
+                
+                const fromTd = document.createElement('td');
+                fromTd.innerHTML = `<span class="masked-key">${maskKey(tx.from_pubkey)}</span>`;
+                
+                const toTd = document.createElement('td');
+                toTd.innerHTML = `<span class="masked-key">${maskKey(tx.to_pubkey)}</span>`;
+                
+                const dateTd = document.createElement('td');
+                dateTd.className = 'date';
+                dateTd.textContent = formatDate(tx.created_at || tx.timestamp);
+                
+                const amountTd = document.createElement('td');
+                amountTd.className = 'amount';
+                amountTd.textContent = Number(tx.amount || 0).toFixed(2);
+                
+                tr.appendChild(hashTd);
+                tr.appendChild(fromTd);
+                tr.appendChild(toTd);
+                tr.appendChild(dateTd);
+                tr.appendChild(amountTd);
+                
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updatePagination() {
+            const numPages = Math.max(1, Math.ceil(totalCount / limit));
+            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${numPages}`;
+            document.getElementById('prevBtn').disabled = currentPage <= 1;
+            document.getElementById('nextBtn').disabled = currentPage >= numPages;
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

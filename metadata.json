@@ -1,0 +1,8 @@
+{
+  "name": "GDC Wallet",
+  "description": "An online-first PWA for a digital currency called GDC.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

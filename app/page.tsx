@@ -15,22 +15,6 @@ export default function Home() {
 
   const [transactions, setTransactions] = useState<any[]>([]);
 
-  useEffect(() => {
-    getSessionUser().then(user => {
-      if (user) {
-        setPubKey(user.id);
-        fetchData(user.id);
-      }
-      setIsLoading(false);
-    });
-  }, []);
-
-  const fetchData = async (id: string) => {
-    const bal = await getBalance(id);
-    setBalance(bal);
-    refreshHistory(id);
-  };
-
   const refreshHistory = async (key: string) => {
     try {
       const { getTransactionHistory } = await import('../src/wallet.js');
@@ -40,6 +24,33 @@ export default function Home() {
       console.error("Failed to refresh history", e);
     }
   };
+
+  const fetchData = async (id: string) => {
+    const bal = await getBalance(id);
+    setBalance(bal);
+    refreshHistory(id);
+  };
+
+  useEffect(() => {
+    getSessionUser().then(user => {
+      if (user) {
+        setPubKey(user.id);
+        fetchData(user.id);
+      }
+      setIsLoading(false);
+    });
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(
+        function(registration) {
+          console.log('ServiceWorker registration successful');
+        },
+        function(err) {
+          console.log('ServiceWorker registration failed: ', err);
+        }
+      );
+    }
+  }, []);
 
   const handleSignUp = async () => {
     try {
@@ -109,7 +120,7 @@ export default function Home() {
   const balanceInt = Math.floor(balance);
   const balanceDec = (balance % 1).toFixed(2).substring(2);
 
-  const ActionPanel = () => (
+  const actionPanelUI = (
     <>
       <div className="flex flex-col gap-4">
         <h3 className="text-[10px] uppercase text-[#666] font-bold tracking-widest">Test Network</h3>
@@ -304,9 +315,13 @@ export default function Home() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
               Dashboard
             </button>
+            <a href="/pending" className="flex items-center justify-start gap-3 p-3 text-[#999] rounded-lg text-sm hover:bg-[#1a1c22] transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              Offline Queue
+            </a>
             <a href="/public-transactions.html" className="flex items-center justify-start gap-3 p-3 text-[#999] rounded-lg text-sm hover:bg-[#1a1c22] transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0-2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              Transactions
+              Ledger
             </a>
           </nav>
         </aside>
@@ -342,7 +357,7 @@ export default function Home() {
 
           {/* Mobile Action Panel (Hidden on Desktop) */}
           <div className="flex flex-col md:grid md:grid-cols-2 gap-6 lg:hidden mb-8 w-full shrink-0">
-            <ActionPanel />
+            {actionPanelUI}
           </div>
 
           {/* Recent Transactions List */}
@@ -409,7 +424,7 @@ export default function Home() {
 
         {/* Right Sidebar: Action Panel */}
         <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-[#24262b] flex-col p-6 gap-8 bg-[#0a0b0e] shrink-0 lg:overflow-y-auto hidden lg:flex order-2 lg:order-none">
-          <ActionPanel />
+          {actionPanelUI}
 
           <div className="mt-auto p-4 bg-[#13151a] border border-[#1f2229] rounded-xl hidden lg:block">
             <h4 className="text-[10px] text-[#666] uppercase font-bold mb-4 flex items-center gap-2">

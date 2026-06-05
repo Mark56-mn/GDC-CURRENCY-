@@ -4,7 +4,7 @@ import { encodeBase64, decodeBase64 } from './crypto.js';
 import naclUtil from 'tweetnacl-util';
 
 const DB_NAME = 'gdc_v2';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise;
 
@@ -14,7 +14,7 @@ let dbPromise;
 export function initDB() {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, oldVersion) {
         if (!db.objectStoreNames.contains('keys')) {
           db.createObjectStore('keys');
         }
@@ -23,6 +23,9 @@ export function initDB() {
         }
         if (!db.objectStoreNames.contains('pending')) {
           db.createObjectStore('pending', { keyPath: 'id', autoIncrement: true });
+        }
+        if (!db.objectStoreNames.contains('failed')) {
+          db.createObjectStore('failed', { keyPath: 'id', autoIncrement: true });
         }
       },
     });
@@ -137,9 +140,33 @@ export async function getPendingTransactions() {
 }
 
 /**
- * Clears all pending transactions.
+ * Removes a pending transaction.
+ * @param {string|number} id
  */
-export async function clearPendingTransactions() {
+export async function removePendingTransaction(id) {
   const db = await initDB();
-  await db.clear('pending');
+  await db.delete('pending', id);
+}
+
+/**
+ * Gets all failed transactions.
+ * @returns {Promise<Array>}
+ */
+export async function getFailedTransactions() {
+  const db = await initDB();
+  if (!db.objectStoreNames.contains('failed')) return [];
+  return await db.getAll('failed');
+}
+
+/**
+ * Saves a failed transaction.
+ * @param {object} txObj 
+ */
+export async function saveFailedTransaction(txObj) {
+  const db = await initDB();
+  if (db.objectStoreNames.contains('failed')) {
+    await db.put('failed', txObj);
+  } else {
+    // If store doesn't exist, ignore or re-init DB. We handle this in init.
+  }
 }

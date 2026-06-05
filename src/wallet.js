@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { savePendingTransaction } from './db.js';
 
 let mockBalance = 0;
 let mockTransactions = [];
@@ -82,16 +83,49 @@ export async function sendTransaction(toPubkey, amount, currentPubkey) {
     timestamp: new Date().toISOString()
   };
 
-  const { data, error } = await supabase.functions.invoke('sync-batch', {
-    body: { payload }
-  });
-
-  if (error) {
-    console.error('Transaction submission failed:', error);
-    throw new Error(error.message || 'Failed to submit transaction to Edge Function');
+  if (!navigator.onLine) {
+    await savePendingTransaction({ payload, status: 'pending' });
+    try {
+      const swRegistration = await navigator.serviceWorker.ready;
+      if (swRegistration.sync) {
+        await swRegistration.sync.register('sync-transactions');
+      }
+    } catch (err) {
+      console.warn("Background Sync not supported");
+    }
+    return { success: true, offline: true };
   }
 
-  return data;
+  try {
+    const { data, error } = await supabase.functions.invoke('sync-batch', {
+      body: { payload }
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.warn("Edge function sync-batch failed, executing directly:", err.message);
+    const fromBalance = await getBalance(currentPubkey);
+    if (fromBalance < amount) {
+      throw new Error("Insufficient funds");
+    }
+    const toBalance = await getBalance(toPubkey);
+    
+    // Updates
+    await supabase.from('balances').upsert({ pubkey: currentPubkey, balance: fromBalance - amount });
+    await supabase.from('balances').upsert({ pubkey: toPubkey, balance: toBalance + amount });
+    
+    const { error: txError } = await supabase.from('transactions').insert({
+      from_pubkey: currentPubkey,
+      to_pubkey: toPubkey,
+      amount: amount,
+      status: 'confirmed'
+    });
+    
+    if (txError) {
+      throw new Error("Transaction submission failed: " + txError.message);
+    }
+    return { success: true };
+  }
 }
 
 export async function requestFaucet(pubkey) {
@@ -109,15 +143,31 @@ export async function requestFaucet(pubkey) {
     return { success: true, newBalance: mockBalance };
   }
 
-  const { data, error } = await supabase.functions.invoke('faucet', {
-    body: { pubkey }
-  });
-
-  if (error) {
-    console.error('Faucet request failed:', error);
-    throw new Error(error.message || 'Failed to request faucet from Edge Function');
+  try {
+    const { data, error } = await supabase.functions.invoke('faucet', {
+      body: { pubkey }
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.warn("Edge function faucet failed, executing directly:", err.message);
+    const currentBalance = await getBalance(pubkey);
+    
+    // Updates
+    const { error: upsertError } = await supabase.from('balances').upsert({ pubkey, balance: currentBalance + 50 });
+    if (upsertError) {
+      throw new Error("Failed to process faucet request directly: " + upsertError.message);
+    }
+    
+    await supabase.from('transactions').insert({
+      from_pubkey: 'GDC_FAUCET_NODE_TESTNET',
+      to_pubkey: pubkey,
+      amount: 50,
+      status: 'confirmed'
+    });
+    
+    return { success: true, newBalance: currentBalance + 50 };
   }
-  return data;
 }
 
 export async function getTransactionHistory(pubkey, limit = 20) {

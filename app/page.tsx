@@ -42,6 +42,9 @@ export default function Home() {
         fetchData(user.id);
       }
       setIsLoading(false);
+    }).catch(err => {
+      console.error("Auth session check failed", err);
+      setIsLoading(false);
     });
 
     if ('serviceWorker' in navigator) {

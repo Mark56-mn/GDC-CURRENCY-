@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { signUp, login, logout, getSessionUser, getBalance, sendTransaction, requestFaucet } from '../src/wallet.js';
+import { motion } from 'motion/react';
+import { Check, Loader2 } from 'lucide-react';
 
 export default function Home() {
   const [email, setEmail] = useState('');
@@ -12,6 +14,8 @@ export default function Home() {
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [txSuccess, setTxSuccess] = useState(false);
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'wallet'|'node'>('wallet');
@@ -89,14 +93,23 @@ export default function Home() {
 
   const handleSend = async () => {
     try {
+      setIsSending(true);
+      setTxSuccess(false);
       setStatus('Sending transaction...');
       await sendTransaction(toPubkey, Number(amount), pubKey);
       setStatus('Transaction sent successfully.');
+      setIsSending(false);
+      setTxSuccess(true);
       fetchData(pubKey);
       setToPubkey('');
       setAmount('');
-      setTimeout(() => setStatus(''), 5000);
+      setTimeout(() => {
+        setStatus('');
+        setTxSuccess(false);
+      }, 5000);
     } catch (err: any) {
+      setIsSending(false);
+      setTxSuccess(false);
       setStatus(`Error: ${err.message}`);
     }
   };
@@ -198,9 +211,31 @@ export default function Home() {
           </div>
           <button 
             onClick={handleSend}
-            className="w-full py-3 bg-[#00e5ff] text-black font-bold text-xs uppercase rounded-lg shadow-[0_0_20px_rgba(0,229,255,0.2)] hover:bg-[#00ccdd] transition-colors"
+            disabled={isSending || txSuccess}
+            className={`w-full py-3 font-bold flex items-center justify-center text-xs uppercase rounded-lg shadow-[0_0_20px_rgba(0,229,255,0.2)] transition-colors ${
+              txSuccess 
+              ? 'bg-[#00ff9d] text-black shadow-[0_0_20px_rgba(0,255,157,0.3)]' 
+              : 'bg-[#00e5ff] text-black hover:bg-[#00ccdd]'
+            } ${isSending ? 'opacity-80 cursor-not-allowed' : ''}`}
           >
-            Execute Transaction
+            {txSuccess ? (
+              <motion.div
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="flex items-center gap-2"
+              >
+                <Check className="w-4 h-4" />
+                Sent Successfully
+              </motion.div>
+            ) : isSending ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Sending...
+              </div>
+            ) : (
+              'Execute Transaction'
+            )}
           </button>
         </div>
       </div>

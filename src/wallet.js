@@ -45,7 +45,7 @@ export async function getBalance(pubkey) {
   if (!isConfigured()) return mockBalance;
 
   const { data, error } = await supabase
-    .from('balances')
+    .from('wallets')
     .select('balance')
     .eq('pubkey', pubkey)
     .single();
@@ -111,8 +111,8 @@ export async function sendTransaction(toPubkey, amount, currentPubkey) {
     const toBalance = await getBalance(toPubkey);
     
     // Updates
-    await supabase.from('balances').upsert({ pubkey: currentPubkey, balance: fromBalance - amount });
-    await supabase.from('balances').upsert({ pubkey: toPubkey, balance: toBalance + amount });
+    await supabase.from('wallets').upsert({ pubkey: currentPubkey, balance: fromBalance - amount });
+    await supabase.from('wallets').upsert({ pubkey: toPubkey, balance: toBalance + amount });
     
     const { error: txError } = await supabase.from('transactions').insert({
       from_pubkey: currentPubkey,
@@ -150,23 +150,17 @@ export async function requestFaucet(pubkey) {
     if (error) throw error;
     return data;
   } catch (err) {
-    console.warn("Edge function faucet failed, executing directly:", err.message);
-    const currentBalance = await getBalance(pubkey);
+    console.warn("Edge function faucet failed, trying secure RPC fallback:", err.message);
     
-    // Updates
-    const { error: upsertError } = await supabase.from('balances').upsert({ pubkey, balance: currentBalance + 50 });
-    if (upsertError) {
-      throw new Error("Failed to process faucet request directly: " + upsertError.message);
+    const { data, error: rpcError } = await supabase.rpc('claim_faucet', {
+      target_pubkey: pubkey
+    });
+
+    if (rpcError) {
+      throw new Error("Faucet claim failed: " + rpcError.message);
     }
     
-    await supabase.from('transactions').insert({
-      from_pubkey: 'GDC_FAUCET_NODE_TESTNET',
-      to_pubkey: pubkey,
-      amount: 50,
-      status: 'confirmed'
-    });
-    
-    return { success: true, newBalance: currentBalance + 50 };
+    return data;
   }
 }
 
